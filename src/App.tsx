@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, FormEvent } from 'react';
-import Editor, { type OnMount } from '@monaco-editor/react';
+import type { editor as MonacoEditor, Position as MonacoPosition } from 'monaco-editor';
 import type { editor as MonacoEditor } from 'monaco-editor';
 import type { User } from '@supabase/supabase-js';
 import { Capacitor } from '@capacitor/core';
@@ -485,7 +485,7 @@ function App() {
       { label: 'try / catch', insertText: 'try {\n\t${1:// code}\n} catch (error) {\n\tconsole.error(error);\n}', detail: 'Error handling template', kind: monaco.languages.CompletionItemKind.Snippet },
     ];
     monaco.languages.registerCompletionItemProvider('javascript', {
-      provideCompletionItems(model, position) {
+      provideCompletionItems(model: MonacoEditor.ITextModel, position: MonacoPosition) {
         const word = model.getWordUntilPosition(position);
         const range = { startLineNumber: position.lineNumber, endLineNumber: position.lineNumber, startColumn: word.startColumn, endColumn: word.endColumn };
         return { suggestions: completions.map((item) => ({ ...item, range, insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet })) };
