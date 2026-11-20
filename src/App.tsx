@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties, FormEvent } from 'react';
+import Editor, { type OnMount } from '@monaco-editor/react';
 import type { editor as MonacoEditor, Position as MonacoPosition } from 'monaco-editor';
-import type { editor as MonacoEditor } from 'monaco-editor';
+import type { User } from '@supabase/supabase-js';
 import type { User } from '@supabase/supabase-js';
 import { Capacitor } from '@capacitor/core';
 import {
