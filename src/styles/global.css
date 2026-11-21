@@ -495,3 +495,125 @@ kbd { padding: 2px 5px; border-radius: 4px; border: 1px solid #434b5e; color: #8
 @media (prefers-reduced-motion: reduce) {
   .filetype-mark, .mobile-terminal-quick, .accordion-chevron { transition: none !important; }
 }
+
+
+/* CODEFORGE bugfix: terminal dock must not depend on a fragile fifth grid row. */
+.editor-column {
+  position: relative !important;
+  grid-template-rows: 39px 28px minmax(0, 1fr) 0 !important;
+  overflow: hidden;
+}
+.editor-column.panel-visible,
+.editor-column.panel-hidden {
+  grid-template-rows: 39px 28px minmax(0, 1fr) 0 !important;
+}
+.editor-column > .bottom-panel.panel-open {
+  position: absolute !important;
+  z-index: 30 !important;
+  inset-inline: 0;
+  bottom: 0 !important;
+  display: flex !important;
+  width: auto;
+  height: clamp(190px, 34vh, 280px) !important;
+  min-height: 170px !important;
+  max-height: 62% !important;
+  border: 1px solid #484465;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: #11141c;
+  box-shadow: 0 -12px 35px #0008, 0 -1px 0 #9b89ff;
+}
+.editor-column > .bottom-panel.panel-closed {
+  display: none !important;
+}
+.editor-column > .bottom-panel.panel-open .panel-header {
+  flex: 0 0 36px;
+  min-height: 36px;
+}
+.editor-column > .bottom-panel.panel-open .panel-content {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.editor-column > .bottom-panel.panel-open .terminal-view {
+  display: flex;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.editor-column > .bottom-panel.panel-open .terminal-output {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+.editor-column > .bottom-panel.panel-open .terminal-input-row {
+  flex: 0 0 42px;
+  min-height: 42px;
+}
+
+@media (max-width: 940px) {
+  .editor-column,
+  .editor-column.panel-visible,
+  .editor-column.panel-hidden {
+    grid-template-rows: 38px 26px minmax(0, 1fr) 30px !important;
+  }
+  .editor-column > .bottom-panel.panel-open {
+    bottom: 30px !important;
+    height: clamp(170px, 34vh, 310px) !important;
+    min-height: 160px !important;
+    max-height: 58% !important;
+  }
+  .editor-column > .bottom-panel.panel-open .panel-header {
+    flex-basis: 34px;
+    min-height: 34px;
+  }
+}
+
+@media (max-width: 700px) {
+  .editor-column,
+  .editor-column.panel-visible,
+  .editor-column.panel-hidden {
+    grid-template-rows: 36px 24px minmax(0, 1fr) 30px !important;
+  }
+  .editor-column > .bottom-panel.panel-open {
+    bottom: 30px !important;
+    height: clamp(165px, 36vh, 290px) !important;
+    min-height: 155px !important;
+    max-height: 58% !important;
+  }
+  .editor-column > .bottom-panel.panel-open .panel-header {
+    padding-inline: 8px;
+  }
+  .editor-column > .bottom-panel.panel-open .panel-tabs {
+    gap: 10px;
+  }
+  .editor-column > .bottom-panel.panel-open .panel-controls {
+    gap: 2px;
+  }
+  .editor-column > .bottom-panel.panel-open .terminal-view {
+    padding: 5px 9px 0;
+    font-size: 10px;
+  }
+  .editor-column > .bottom-panel.panel-open .terminal-input-row {
+    flex-basis: 44px;
+    min-height: 44px;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .editor-column > .bottom-panel.panel-open .terminal-input-row input {
+    font-size: 12px;
+  }
+  .editor-column > .bottom-panel.panel-open .terminal-input-row button {
+    width: 34px;
+    height: 32px;
+  }
+}
+
+@media (max-height: 480px) {
+  .editor-column > .bottom-panel.panel-open {
+    height: 46% !important;
+    min-height: 130px !important;
+  }
+}
