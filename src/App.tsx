@@ -566,8 +566,8 @@ function App() {
     editorRef.current = editor;
     diagnosticsSubscriptionRef.current?.dispose();
     diagnosticsSubscriptionRef.current = monaco.editor.onDidChangeMarkers(() => {
-      const collected = monaco.editor.getModels().flatMap((model) =>
-        monaco.editor.getModelMarkers({ resource: model.uri }).map((marker) => ({
+      const collected = monaco.editor.getModels().flatMap((model: MonacoEditor.ITextModel) =>
+        monaco.editor.getModelMarkers({ resource: model.uri }).map((marker: MonacoEditor.IMarker) => ({
           message: marker.message,
           line: marker.startLineNumber,
           path: model.uri.path.replace(/^\/split:/, '').replace(/^\//, '/'),
