@@ -399,6 +399,9 @@ function App() {
       return;
     }
 
+    // Capture the non-null client so TypeScript can safely narrow it inside callbacks.
+    const supabaseClient = supabase;
+
     let active = true;
     let authEventReceived = false;
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -425,7 +428,7 @@ function App() {
     // missed. Do not overwrite a session if the listener already delivered one.
     const recoveryTimer = window.setTimeout(() => {
       if (!active || authEventReceived) return;
-      void supabase.auth.getSession().then(({ data, error }) => {
+      void supabaseClient.auth.getSession().then(({ data, error }) => {
         if (!active || authEventReceived) return;
         if (error) console.warn('Supabase session recovery:', error.message);
         const nextUser = data.session?.user ?? null;
