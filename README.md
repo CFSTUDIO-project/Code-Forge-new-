@@ -1,10 +1,10 @@
-# CODEFORGE
+# CODEFORGE V2
 
 **Forge your vision. Connect and code.**
 
-CODEFORGE is an open-source, mobile-ready development workbench. This repository contains the first runnable foundation for the Web app and the Android APK build pipeline.
+CODEFORGE is an open-source, mobile-ready development workbench. This repository contains the CODEFORGE V2 web workbench and its Android APK build pipeline.
 
-> This is an early v0.1.0 foundation, not a finished VS Code replacement. The editor, local workspace, sandboxed web preview, browser JavaScript runner, Pyodide Python runner, guest mode, Supabase email/password auth, Supabase cloud workspace sync and GitHub Actions build workflows have working implementations. Some integrations are intentionally marked as setup-required or not bundled yet; see [Feature status](#feature-status).
+> CODEFORGE V2 is a browser development workbench, not a drop-in replacement for VS Code Desktop. This version adds a working file-creation flow with live file marks, split editing, file navigation, a safer virtual workspace terminal, ZIP/JSON import-export, expanded command palette actions and persisted editor settings. See [V2 feature status](docs/FEATURE-ROADMAP.md) for what actually runs and which external integrations still require credentials or native runtimes.
 
 ## Design direction
 
@@ -103,7 +103,7 @@ VITE_FIREBASE_VAPID_KEY=
 
 3. For Web Push, enable Firebase Cloud Messaging, create a Web Push certificate (VAPID key), serve the app over HTTPS, and configure a service worker plus a trusted sender environment. The FCM server/Admin credential must stay server-side and must never be embedded in the Web app or APK.
 
-The current starter initializes the Firebase app configuration only. Device-token registration, background-message UX and a trusted notification sender are a separate integration milestone, not claimed as complete in v0.1.0. Firebase Analytics and Crashlytics are also not enabled by default.
+The current starter initializes the Firebase app configuration only. Device-token registration, background-message UX and a trusted notification sender are a separate integration milestone, not claimed as complete in V2. Firebase Analytics and Crashlytics are also not enabled by default.
 
 ## GitHub and Workflows
 
@@ -126,31 +126,32 @@ Both CI workflows read these variables when building. Never add OAuth client sec
 
 ### Uploading the source from an Android phone
 
-1. Create an empty repository on GitHub (do not initialize it with a README or license, because this ZIP already includes them).
-2. Extract the ZIP on the phone. With Termux, the commands are:
+1. The V2 source archive is intended to update the existing CODEFORGE repository, not create a second empty repository.
+2. Extract the ZIP into a temporary folder on the phone. With Termux, the update flow is:
 
    ```bash
    pkg install unzip git nodejs-lts -y
    termux-setup-storage
    mkdir -p ~/projects && cd ~/projects
-   unzip ~/storage/downloads/CODEFORGE-v0.1.0.zip
-   cd CODEFORGE
-   git init -b main
-   git add .
-   git commit -m "Initial CODEFORGE v0.1.0"
-   git remote add origin https://github.com/USERNAME/REPOSITORY.git
-   git push -u origin main
+   git clone https://github.com/CFSTUDIO-project/Code-Forge-new-.git
+   cd Code-Forge-new-
+   unzip -o ~/storage/downloads/CODEFORGE-V2-source.zip -d .
+   npm install --no-audit --no-fund
+   npm run build
+   git add -A
+   git commit -m "Upgrade CODEFORGE to V2"
+   git push origin main
    ```
 
-   Replace `USERNAME/REPOSITORY` with the repository you created. GitHub may ask you to authenticate; use GitHub's supported sign-in/token flow, and never paste a token into a public chat or commit it into the project.
-3. In the repository, open **Actions** and check **CODEFORGE CI**. On the first run, GitHub may require enabling Actions. When the run completes, download `codeforge-android-debug-apk` to get the debug APK and `codeforge-web-dist` for the web build.
+   If Git reports there is nothing to commit, check that the ZIP was extracted into the repository folder. GitHub may ask you to authenticate; use the official GitHub sign-in flow and never paste a token into a public chat or commit it into the project.
+3. In the existing repository, open **Actions** and check **CODEFORGE CI**. When the run completes, download `codeforge-android-debug-apk` for the debug APK and `codeforge-web-dist` for the web build.
 4. To publish the web version, open **Settings → Pages**, select **GitHub Actions** as the source, then run **Deploy CODEFORGE Web to GitHub Pages** from Actions.
 
 The first GitHub Actions build downloads Android and npm dependencies and may take several minutes. Build artifacts expire after 14 days in this workflow; they are not permanent releases.
 
 ## Runtime and terminal model
 
-The bottom panel is a **workspace terminal**, not a full OS shell. It currently supports `help`, `pwd`, `ls`, `cat`, `echo`, `touch`, `mkdir`, `clear`, `python <file.py>`, `js <file.js>` and `preview`.
+The bottom panel is a **workspace terminal**, not a full OS shell. It supports `help`, `pwd`, `ls`, `tree`, `cd`, `cat`, `head`, `tail`, `grep`, `wc`, `echo`, `touch`, `mkdir`, `rm`, `mv`, `open`, `clear`, `python <file.py>`, `js <file.js>` and `preview`. The terminal uses a virtual workspace path and operates only on CODEFORGE text files. It cannot launch a shell installed on Android or run system package managers.
 
 - Python uses the pinned Pyodide WebAssembly distribution in a dedicated Worker, so Python execution does not block the UI thread. It needs an internet connection on first load to download the pinned runtime and package files. It is CPython compiled for WebAssembly, not the host device's native CPython; packages requiring unsupported native/system capabilities may not work.
 - JavaScript source files run in a disposable Web Worker without DOM access and with a five-second execution limit. This is a browser JavaScript runtime, not Node.js.
@@ -159,7 +160,9 @@ The bottom panel is a **workspace terminal**, not a full OS shell. It currently 
 
 ## Feature status
 
-| Area | v0.1.0 status |
+For the complete V2 status matrix, see [docs/FEATURE-ROADMAP.md](docs/FEATURE-ROADMAP.md). The summary below describes foundational services that are still part of the project.
+
+| Area | Current status |
 |---|---|
 | Web app + responsive workbench | Implemented |
 | Android Capacitor project generation | Implemented through Actions/local commands |
@@ -177,7 +180,7 @@ The bottom panel is a **workspace terminal**, not a full OS shell. It currently 
 | HTML/CSS/JS Live Preview | Implemented in sandboxed iframe |
 | GitHub Actions build workflows | Included; needs repository push and Actions enabled |
 | Git operations and live GitHub Actions controls | UI preparation only; API integration remains |
-| Extension Marketplace | Local catalog/enable state only; signed package distribution and sandbox host remain |
+| Extension Tool Catalog | Local selections only; no third-party package execution |
 | Firebase | Web app initialization only; FCM device registration/sending remains |
 | Native runtimes for C/C++/Rust/Java/Kotlin/Go/PHP/C# | Not bundled yet |
 | LSP/debug adapters for every language | Not bundled; support varies by language |
