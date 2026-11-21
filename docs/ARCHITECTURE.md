@@ -1,4 +1,4 @@
-# CODEFORGE Architecture
+# CODEFORGE V2 Architecture
 
 ## Product shape
 
@@ -8,7 +8,7 @@ CODEFORGE is one workbench with two delivery targets: a responsive Web app and a
 
 - **GitHub:** source repository, issues, pull requests, GitHub Actions CI, releases and downloadable build artifacts.
 - **Supabase:** single identity provider (email/password and configured Web OAuth), Postgres metadata, project file records, Row Level Security and cloud workspace synchronization.
-- **Firebase:** optional companion services. The v0.1.0 app initializes a Firebase Web app configuration; FCM registration/sender and Crashlytics are future integration work. Do not duplicate authentication or project database records across Firebase and Supabase.
+- **Firebase:** optional companion services. The V2 app initializes Firebase Web configuration when supplied; FCM registration/sender and Crashlytics are not implemented in this build. Do not duplicate authentication or project database records across Firebase and Supabase.
 - **IndexedDB:** local project workspace and offline edits.
 - **Monaco:** text editor, syntax tokens, built-in language workers and editor completion providers.
 - **Pyodide Worker:** browser Python WebAssembly runtime.
@@ -20,10 +20,10 @@ CODEFORGE is one workbench with two delivery targets: a responsive Web app and a
 
 1. Create one Supabase client with persisted sessions and PKCE flow.
 2. Subscribe to `onAuthStateChange` once at the application root.
-3. Restore the persisted session with `getSession`.
+3. Use the initial `INITIAL_SESSION` event from the single auth-state subscription to restore the persisted session and process the Web OAuth callback.
 4. Render the sign-in view only when there is neither an authenticated user nor a current guest session.
-5. On sign-out, call Supabase sign-out and clear local guest workspace only after user confirmation.
-6. OAuth callback routing remains on the same app entry point. Web OAuth is enabled when the configured provider and redirect allow-list are correct. Native OAuth requires a tested deep-link exchange implementation before being enabled.
+5. On sign-out, call Supabase sign-out and clear the local workspace only after user confirmation.
+6. Web OAuth requires the provider and redirect allow-list to be configured. Native OAuth requires a tested deep-link exchange implementation before it can be enabled.
 
 This avoids a protected-route redirect loop caused by multiple independent auth state stores.
 
@@ -46,8 +46,8 @@ An editor language ID is not a runtime. Runtime support must be represented sepa
 | HTML/CSS/JS | Sandboxed iframe | Browser preview |
 | Other language IDs | None bundled | Highlighting/editor only |
 
-A future runtime registry should define executable, version, target platform, package system, file I/O, stdin/stdout, cancellation, resource limit, and sandbox boundary for each language.
+A future runtime registry, if added, must define executable, version, target platform, package system, file I/O, stdin/stdout, cancellation, resource limit, and sandbox boundary for each language.
 
 ## Extension model
 
-The v0.1.0 catalog is presentation/local state only. A real marketplace requires a versioned manifest schema, cryptographic package verification, publisher identity, permission prompts, compatibility checks, sandboxed extension host, rollback and abuse reporting before package installation can be enabled.
+The V2 Workspace Tool Catalog stores local preferences only. A real marketplace requires a versioned manifest schema, cryptographic package verification, publisher identity, permission prompts, compatibility checks, sandboxed extension host, rollback and abuse reporting before package installation can be enabled.
