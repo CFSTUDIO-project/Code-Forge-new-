@@ -64,6 +64,19 @@ function LoginScreen({ onGuest }: { onGuest: (profile: GuestProfile) => void }) 
   const [showGuestWarning, setShowGuestWarning] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const oauthError = params.get('error_description') || params.get('error') || params.get('error_code');
+    if (oauthError) {
+      setNotice(oauthError.replace(/\+/g, ' '));
+      params.delete('error');
+      params.delete('error_description');
+      params.delete('error_code');
+      const nextUrl = `${window.location.pathname}${params.size ? `?${params.toString()}` : ''}${window.location.hash}`;
+      window.history.replaceState({}, document.title, nextUrl);
+    }
+  }, []);
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setNotice('');
@@ -94,17 +107,28 @@ function LoginScreen({ onGuest }: { onGuest: (profile: GuestProfile) => void }) 
       setNotice('OAuth di APK memerlukan konfigurasi deep-link callback. Gunakan email/password untuk build ini; panduan ada di README.');
       return;
     }
+
+    setNotice('');
     setBusy(true);
+    // A guest session is local UI state, not a Supabase identity. Remove its marker
+    // before redirecting so it cannot mask the authenticated session on return.
+    sessionStorage.removeItem('cf-guest-profile');
+    sessionStorage.setItem('cf-oauth-pending', provider);
+
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
-        options: { redirectTo: `${window.location.origin}/` },
+        options: {
+          redirectTo: new URL('/', window.location.origin).toString(),
+          ...(provider === 'google' ? { queryParams: { prompt: 'select_account' } } : {}),
+        },
       });
       if (error) throw error;
+      // Supabase performs the browser redirect. Keep the busy state until navigation.
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'OAuth sign-in failed.');
-    } finally {
+      sessionStorage.removeItem('cf-oauth-pending');
       setBusy(false);
+      setNotice(error instanceof Error ? error.message : 'OAuth sign-in failed.');
     }
   };
 
@@ -297,8 +321,8 @@ function App() {
   const [panelTab, setPanelTab] = useState<PanelTab>('terminal');
   const [panelOpen, setPanelOpen] = useState(() => {
     const uiVersion = localStorage.getItem('cf-ui-version');
-    if (uiVersion !== '2') {
-      localStorage.setItem('cf-ui-version', '2');
+    if (uiVersion !== '3') {
+      localStorage.setItem('cf-ui-version', '3');
       localStorage.setItem('cf-terminal-open', 'true');
       return true;
     }
@@ -376,21 +400,52 @@ function App() {
     }
 
     let active = true;
+    let authEventReceived = false;
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!active) return;
-      // INITIAL_SESSION arrives after Supabase restores storage and processes OAuth callback.
-      // Using one session source avoids getSession() racing the auth-state listener.
-      setAuthUser(session?.user ?? null);
+      authEventReceived = true;
+      // Keep this callback synchronous. Supabase emits INITIAL_SESSION after it
+      // restores persisted auth and processes the PKCE redirect callback.
+      const nextUser = session?.user ?? null;
+      setAuthUser(nextUser);
       setAuthChecking(false);
 
-      if (event === 'SIGNED_OUT') {
+      if (nextUser) {
+        sessionStorage.removeItem('cf-guest-profile');
+        sessionStorage.removeItem('cf-oauth-pending');
+        setGuest(null);
+      } else if (event === 'SIGNED_OUT') {
         setGuest(null);
         sessionStorage.removeItem('cf-guest-profile');
+        sessionStorage.removeItem('cf-oauth-pending');
       }
     });
 
+    // Recovery path for browsers where the initial auth event is delayed or
+    // missed. Do not overwrite a session if the listener already delivered one.
+    const recoveryTimer = window.setTimeout(() => {
+      if (!active || authEventReceived) return;
+      void supabase.auth.getSession().then(({ data, error }) => {
+        if (!active || authEventReceived) return;
+        if (error) console.warn('Supabase session recovery:', error.message);
+        const nextUser = data.session?.user ?? null;
+        setAuthUser(nextUser);
+        setAuthChecking(false);
+        if (nextUser) {
+          sessionStorage.removeItem('cf-guest-profile');
+          sessionStorage.removeItem('cf-oauth-pending');
+          setGuest(null);
+        }
+      }).catch((error: unknown) => {
+        if (!active || authEventReceived) return;
+        console.warn('Supabase session recovery failed:', error);
+        setAuthChecking(false);
+      });
+    }, 2200);
+
     return () => {
       active = false;
+      window.clearTimeout(recoveryTimer);
       subscription.unsubscribe();
     };
   }, []);
@@ -619,39 +674,107 @@ function App() {
   };
 
   const runPython = (code: string, fileName: string) => {
-    setPanelOpen(true); setPanelTab('terminal'); setRuntimeState('loading');
+    setPanelTab('terminal');
+    setPanelOpen(true);
+    setRuntimeState('loading');
     appendTerminal('info', `Starting Python runtime for ${fileName}…`);
+
     pythonWorkerRef.current?.terminate();
-    const worker = new Worker(`${import.meta.env.BASE_URL}workers/python.worker.js`);
-    pythonWorkerRef.current = worker;
-    worker.onmessage = (event: MessageEvent) => {
-      const data = event.data as { type: string; text?: string; version?: string };
-      if (data.type === 'ready') { setRuntimeState('ready'); setRuntimeVersion(data.version ?? 'WebAssembly'); appendTerminal('success', `Python runtime ready · ${data.version ?? 'Pyodide'}`); }
-      if (data.type === 'stdout') appendTerminal('stdout', data.text ?? '');
-      if (data.type === 'stderr') appendTerminal('stderr', data.text ?? '');
-      if (data.type === 'error') { setRuntimeState('error'); appendTerminal('stderr', data.text ?? 'Python runtime error'); worker.terminate(); if (pythonWorkerRef.current === worker) pythonWorkerRef.current = null; }
-      if (data.type === 'done') { appendTerminal('success', 'Process finished with exit code 0'); worker.terminate(); if (pythonWorkerRef.current === worker) pythonWorkerRef.current = null; }
-    };
-    worker.onerror = (event) => { setRuntimeState('error'); appendTerminal('stderr', `Python worker error: ${event.message}`); worker.terminate(); if (pythonWorkerRef.current === worker) pythonWorkerRef.current = null; };
-    worker.postMessage({ type: 'run', code });
+    try {
+      const workerUrl = new URL(`${import.meta.env.BASE_URL}workers/python.worker.js`, window.location.href);
+      const worker = new Worker(workerUrl, { name: 'codeforge-python-runtime' });
+      pythonWorkerRef.current = worker;
+
+      worker.onmessage = (event: MessageEvent) => {
+        const data = event.data as { type?: string; text?: string; version?: string };
+        if (data.type === 'ready') {
+          setRuntimeState('ready');
+          setRuntimeVersion(data.version ?? 'WebAssembly');
+          appendTerminal('success', `Python runtime ready · ${data.version ?? 'Pyodide'}`);
+        }
+        if (data.type === 'stdout') appendTerminal('stdout', data.text ?? '');
+        if (data.type === 'stderr') appendTerminal('stderr', data.text ?? '');
+        if (data.type === 'error') {
+          setRuntimeState('error');
+          appendTerminal('stderr', data.text ?? 'Python runtime error');
+          worker.terminate();
+          if (pythonWorkerRef.current === worker) pythonWorkerRef.current = null;
+        }
+        if (data.type === 'done') {
+          setRuntimeState('ready');
+          appendTerminal('success', 'Process finished with exit code 0');
+          worker.terminate();
+          if (pythonWorkerRef.current === worker) pythonWorkerRef.current = null;
+        }
+      };
+      worker.onerror = (event) => {
+        setRuntimeState('error');
+        appendTerminal('stderr', `Python worker error: ${event.message || 'Could not load runtime worker.'}`);
+        worker.terminate();
+        if (pythonWorkerRef.current === worker) pythonWorkerRef.current = null;
+      };
+      worker.onmessageerror = () => {
+        setRuntimeState('error');
+        appendTerminal('stderr', 'Python worker returned a message that could not be decoded.');
+        worker.terminate();
+        if (pythonWorkerRef.current === worker) pythonWorkerRef.current = null;
+      };
+      worker.postMessage({ type: 'run', code });
+    } catch (error) {
+      setRuntimeState('error');
+      appendTerminal('stderr', `Could not start Python: ${error instanceof Error ? error.message : String(error)}`);
+      pythonWorkerRef.current = null;
+    }
   };
 
   const runJavaScript = (code: string, fileName: string) => {
-    setPanelOpen(true); setPanelTab('terminal');
+    setPanelTab('terminal');
+    setPanelOpen(true);
     appendTerminal('info', `Running ${fileName} in isolated browser Worker…`);
     javascriptWorkerRef.current?.terminate();
-    const worker = new Worker(`${import.meta.env.BASE_URL}workers/javascript.worker.js`);
-    javascriptWorkerRef.current = worker;
-    const timeout = window.setTimeout(() => { worker.terminate(); javascriptWorkerRef.current = null; appendTerminal('stderr', 'Execution stopped after 5 seconds (time limit).'); }, 5000);
-    worker.onmessage = (event: MessageEvent) => {
-      const data = event.data as { type: string; text?: string };
-      if (data.type === 'stdout') appendTerminal('stdout', data.text ?? '');
-      if (data.type === 'stderr') appendTerminal('stderr', data.text ?? '');
-      if (data.type === 'error') { appendTerminal('stderr', data.text ?? 'JavaScript error'); window.clearTimeout(timeout); worker.terminate(); javascriptWorkerRef.current = null; }
-      if (data.type === 'done') { appendTerminal('success', 'Browser JavaScript execution finished.'); window.clearTimeout(timeout); worker.terminate(); javascriptWorkerRef.current = null; }
-    };
-    worker.onerror = (event) => { appendTerminal('stderr', event.message); window.clearTimeout(timeout); worker.terminate(); javascriptWorkerRef.current = null; };
-    worker.postMessage({ code });
+
+    try {
+      const workerUrl = new URL(`${import.meta.env.BASE_URL}workers/javascript.worker.js`, window.location.href);
+      const worker = new Worker(workerUrl, { name: 'codeforge-javascript-runtime' });
+      javascriptWorkerRef.current = worker;
+      const timeout = window.setTimeout(() => {
+        worker.terminate();
+        if (javascriptWorkerRef.current === worker) javascriptWorkerRef.current = null;
+        appendTerminal('stderr', 'Execution stopped after 5 seconds (time limit).');
+      }, 5000);
+
+      const finish = () => {
+        window.clearTimeout(timeout);
+        worker.terminate();
+        if (javascriptWorkerRef.current === worker) javascriptWorkerRef.current = null;
+      };
+
+      worker.onmessage = (event: MessageEvent) => {
+        const data = event.data as { type?: string; text?: string };
+        if (data.type === 'stdout') appendTerminal('stdout', data.text ?? '');
+        if (data.type === 'stderr') appendTerminal('stderr', data.text ?? '');
+        if (data.type === 'error') {
+          appendTerminal('stderr', data.text ?? 'JavaScript error');
+          finish();
+        }
+        if (data.type === 'done') {
+          appendTerminal('success', 'Browser JavaScript execution finished.');
+          finish();
+        }
+      };
+      worker.onerror = (event) => {
+        appendTerminal('stderr', `JavaScript worker error: ${event.message || 'Could not load runtime worker.'}`);
+        finish();
+      };
+      worker.onmessageerror = () => {
+        appendTerminal('stderr', 'JavaScript worker returned a message that could not be decoded.');
+        finish();
+      };
+      worker.postMessage({ code });
+    } catch (error) {
+      appendTerminal('stderr', `Could not start JavaScript: ${error instanceof Error ? error.message : String(error)}`);
+      javascriptWorkerRef.current = null;
+    }
   };
 
   const stopExecution = () => {
@@ -671,12 +794,31 @@ function App() {
   };
 
   const runActiveFile = () => {
-    if (!activeFile) return notify('Open a file first.');
+    if (!activeFile) {
+      notify('Open a file first.');
+      return;
+    }
+
+    setPanelTab('terminal');
+    setPanelOpen(true);
+    const currentModel = editorRef.current?.getModel();
+    const source = currentModel?.uri.path.endsWith(activePath)
+      ? currentModel.getValue()
+      : activeFile.content;
     const language = languageForFile(activeFile.name);
-    if (language.runnable === 'python') runPython(activeFile.content, activeFile.name);
-    else if (language.runnable === 'javascript') runJavaScript(activeFile.content, activeFile.name);
-    else if (language.runnable === 'preview') runPreview();
-    else notify(`${language.label} has editor support, but no runtime is bundled in this build.`);
+    appendTerminal('command', `run ${activeFile.name}`);
+
+    if (language.runnable === 'python') {
+      runPython(source, activeFile.name);
+    } else if (language.runnable === 'javascript') {
+      runJavaScript(source, activeFile.name);
+    } else if (language.runnable === 'preview') {
+      runPreview();
+    } else {
+      const message = `${language.label} (${activeFile.name}) has editor support, but no runtime is bundled in this build.`;
+      appendTerminal('stderr', message);
+      notify(message);
+    }
   };
 
   const normalizeTerminalPath = (input: string, base = terminalCwd) => {
@@ -930,19 +1072,42 @@ function App() {
 
   const signOut = async () => {
     if (!window.confirm('Log out and clear this device workspace? Guest projects will be permanently removed from this device.')) return;
-    if (authUser && supabase) {
-      const { error } = await supabase.auth.signOut();
-      if (error) return notify(`Sign out failed: ${error.message}`);
-    }
+
     pythonWorkerRef.current?.terminate();
     javascriptWorkerRef.current?.terminate();
+    pythonWorkerRef.current = null;
+    javascriptWorkerRef.current = null;
+
+    // Local scope prevents a logout on this browser from revoking sessions on
+    // the user's other devices. The local app state is cleared even if the
+    // best-effort server revoke reports a network error.
+    let signOutWarning = '';
+    if (authUser && supabase) {
+      try {
+        const { error } = await supabase.auth.signOut({ scope: 'local' });
+        if (error) signOutWarning = `Local session cleared; server revoke warning: ${error.message}`;
+      } catch (error) {
+        signOutWarning = `Signed out on this device; server revoke could not be confirmed: ${error instanceof Error ? error.message : String(error)}`;
+      }
+    }
+
     await clearWorkspace();
     sessionStorage.removeItem('cf-guest-profile');
-    setGuest(null); setAuthUser(null); setFiles(starterFiles); setWorkspaceReady(false); setProfileOpen(false);
+    sessionStorage.removeItem('cf-oauth-pending');
+    setGuest(null);
+    setAuthUser(null);
+    setFiles(starterFiles);
+    setWorkspaceReady(false);
+    setProfileOpen(false);
+    setAuthChecking(false);
+    if (signOutWarning) notify(signOutWarning);
   };
 
   const startGuest = (profile: GuestProfile) => {
+    sessionStorage.removeItem('cf-oauth-pending');
     sessionStorage.setItem('cf-guest-profile', JSON.stringify(profile));
+    setAuthUser(null);
+    setAuthChecking(false);
     setGuest(profile);
   };
 
