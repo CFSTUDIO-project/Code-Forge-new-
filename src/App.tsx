@@ -322,22 +322,30 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!supabase) { setAuthChecking(false); return; }
-    let alive = true;
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!alive) return;
+    if (!supabase) {
+      setAuthUser(null);
+      setAuthChecking(false);
+      return;
+    }
+
+    let active = true;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active) return;
+      // INITIAL_SESSION arrives after Supabase restores storage and processes OAuth callback.
+      // Using one session source avoids getSession() racing the auth-state listener.
       setAuthUser(session?.user ?? null);
       setAuthChecking(false);
+
+      if (event === 'SIGNED_OUT') {
+        setGuest(null);
+        sessionStorage.removeItem('cf-guest-profile');
+      }
     });
-    supabase.auth.getSession().then(({ data, error }) => {
-      if (!alive) return;
-      if (error) console.warn('Session restore failed:', error.message);
-      setAuthUser(data.session?.user ?? null);
-      setAuthChecking(false);
-    }).catch((error) => {
-      if (alive) { console.warn(error); setAuthChecking(false); }
-    });
-    return () => { alive = false; listener.subscription.unsubscribe(); };
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -659,7 +667,12 @@ function App() {
   const filteredCommands = [
     { id: 'save', label: 'Save workspace', detail: 'Ctrl / Cmd + S', run: () => notify('Workspace saved locally.') },
     { id: 'preview', label: 'Open Live Preview', detail: 'Run HTML, CSS and JavaScript', run: runPreview },
-    { id: 'terminal', label: 'Toggle terminal panel', detail: 'Show or hide the bottom panel', run: () => setPanelOpen((open) => !open) },
+    {
+      id: 'terminal',
+      label: 'Open terminal panel',
+      detail: 'Show the workspace terminal',
+      run: () => { setPanelTab('terminal'); setPanelOpen(true); },
+    },
     { id: 'search', label: 'Search in files', detail: 'Find text in this workspace', run: () => setActiveView('search') },
     { id: 'extensions', label: 'Open Extension Marketplace', detail: 'Browse local extension catalog', run: () => setActiveView('extensions') },
     { id: 'workflows', label: 'Open Workflows', detail: 'Inspect repository workflow files', run: () => setActiveView('workflows') },
@@ -705,7 +718,7 @@ function App() {
       <main className="editor-column">
         <div className="editor-tabbar">
           <div className="editor-tabs">{openTabs.map((path) => { const file = files.find((item) => item.path === path); if (!file) return null; return <button key={path} className={`editor-tab ${activePath === path ? 'active' : ''}`} onClick={() => openFile(path)}><FileIcon file={file} /><span>{file.name}</span><button className="tab-close" onClick={(event) => { event.stopPropagation(); closeTab(path); }}><X size={12} /></button></button>; })}<button className="new-tab-button" onClick={addFile} title="New file"><Plus size={15} /></button></div>
-          <div className="editor-actions"><button title="Run current file" onClick={runActiveFile}><Play size={15} className="run-icon" /></button><button title="Open preview" onClick={runPreview}><Eye size={15} /></button><button title="Split editor (coming soon)" onClick={() => notify('Split editor is planned for the next workbench milestone.')}><PanelRight size={15} /></button><button title="More editor actions" onClick={() => setSettingsOpen(true)}><MoreHorizontal size={16} /></button></div>
+          <div className="editor-actions"><button title="Open terminal" aria-label="Open terminal" onClick={() => { setPanelTab('terminal'); setPanelOpen(true); }}><Terminal size={15} /></button><button title="Run current file"  onClick={runActiveFile}><Play size={15} className="run-icon" /></button><button title="Open preview" onClick={runPreview}><Eye size={15} /></button><button title="Split editor (coming soon)" onClick={() => notify('Split editor is planned for the next workbench milestone.')}><PanelRight size={15} /></button><button title="More editor actions" onClick={() => setSettingsOpen(true)}><MoreHorizontal size={16} /></button></div>
         </div>
         <div className="breadcrumbs"><span>CODEFORGE_PROJECT</span><ChevronRight size={12} /><span>{activeFile?.path.split('/').filter(Boolean).slice(0, -1).join(' / ') || 'src'}</span><ChevronRight size={12} /><b>{activeFile?.name ?? 'No file selected'}</b></div>
         <div className="editor-surface">
