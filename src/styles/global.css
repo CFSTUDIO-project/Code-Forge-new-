@@ -367,3 +367,81 @@ kbd { padding: 2px 5px; border-radius: 4px; border: 1px solid #434b5e; color: #8
 .extension-install:hover { background: #7966e33a; }.extension-installed { color: #90c5a8; border-color: #3b6654; background: #5db98e14; }
 .marketplace-footnote { padding: 9px; color: #7e899d; border: 1px dashed #394255; border-radius: 6px; font-size: 8px; line-height: 1.55; }
 .empty-market { min-height: 120px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 7px; color: #82c8a2; text-align: center; }.empty-market b { color: #d8deea; font-size: 10px; }.empty-market span { max-width: 170px; color: #808ba0; font-size: 9px; line-height: 1.5; }
+
+
+/* Terminal recovery and small-screen usability */
+.editor-actions button[aria-label="Open terminal"] {
+  color: #a99aff;
+  background: #8d7cfb12;
+  border: 1px solid #8d7cfb2b;
+}
+.editor-actions button[aria-label="Open terminal"]:active {
+  background: #8d7cfb2b;
+}
+.bottom-panel.panel-open {
+  min-height: 0;
+  height: 100%;
+}
+.bottom-panel.panel-closed {
+  min-height: 0;
+  height: 0;
+  overflow: hidden;
+}
+.panel-header {
+  flex: 0 0 auto;
+}
+.panel-content,
+.terminal-view,
+.terminal-output {
+  min-height: 0;
+}
+.terminal-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.terminal-output {
+  flex: 1 1 auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.terminal-input-row {
+  flex: 0 0 auto;
+}
+.terminal-input-row input {
+  min-width: 0;
+}
+@media (max-width: 700px) {
+  .editor-actions button[aria-label="Open terminal"] {
+    color: #c4baff;
+    border-color: #8d7cfb55;
+  }
+  .panel-content {
+    overflow: hidden;
+  }
+  .terminal-input-row {
+    padding-bottom: max(5px, env(safe-area-inset-bottom));
+  }
+}
+
+
+/* Terminal recovery and small-screen usability */
+.editor-actions button[aria-label="Open terminal"] {
+  color: #a99aff;
+  background: #8d7cfb12;
+  border: 1px solid #8d7cfb2b;
+}
+.editor-actions button[aria-label="Open terminal"]:active { background: #8d7cfb2b; }
+.bottom-panel.panel-open { min-height: 0; height: 100%; }
+.bottom-panel.panel-closed { min-height: 0; height: 0; overflow: hidden; }
+.panel-header { flex: 0 0 auto; }
+.panel-content, .terminal-view, .terminal-output { min-height: 0; }
+.terminal-view { display: flex; flex-direction: column; height: 100%; }
+.terminal-output { flex: 1 1 auto; overflow: auto; overscroll-behavior: contain; }
+.terminal-input-row { flex: 0 0 auto; }
+.terminal-input-row input { min-width: 0; }
+@media (max-width: 700px) {
+  .editor-actions button[aria-label="Open terminal"] { color: #c4baff; border-color: #8d7cfb55; }
+  .panel-content { overflow: hidden; }
+  .terminal-input-row { padding-bottom: max(5px, env(safe-area-inset-bottom)); }
+}
